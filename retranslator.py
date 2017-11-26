@@ -1,3 +1,4 @@
+import logging
 import re
 from collections import namedtuple
 from urllib.parse import urlparse
@@ -8,9 +9,6 @@ from flask import request
 from flask import Response
 
 
-USERAGENT = ('Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:55.0) Gecko/20100101 '
-             'Firefox/55.0')
-REQUESTS_HEADERS = {'User-Agent': USERAGENT}
 DEFAULT_MIMETYPE = 'text/html; charset=UTF-8'
 
 
@@ -45,23 +43,33 @@ def replace_urls(text):
     return text
 
 
-@app.route('/<path:link>', strict_slashes=False)
-def translate(link):
-    link = 'http://' + link
-    
-    try:
-        response = requests.get(link, timeout=10, headers=REQUESTS_HEADERS)
-    except Exception:
-        response = get_fail_response()
-    
-    content = response.content
-    
+def get_new_content(response):
     mimetype = response.headers.get('Content-Type', DEFAULT_MIMETYPE)
     if 'text' in mimetype.lower():
         text = replace_urls(response.text)
-        content = bytes(text, 'utf-8')
+        return bytes(text, 'utf-8')
+
+
+def perform_request(method, link, headers={}):
+    if not isinstance(headers, dict):
+        headers = dict(headers)
+    if '://' not in link[:10]:
+        link = 'http://' + link
+    response = requests.request(method, link, headers=headers, timeout=10)
+    return response
+
+
+@app.route('/<path:link>', strict_slashes=False)
+def translate(link):
+    try:
+        req_response = perform_request(request.method, link, request.headers)
+    except Exception:
+        req_response = get_fail_response()
     
-    return Response(content, mimetype=mimetype)
+    content = get_new_content(req_response)
+    req_headers = dict(req_response.headers)
+    res_response = Response(content, headers=req_headers)
+    return res_response
 
 
 if __name__ == '__main__':
