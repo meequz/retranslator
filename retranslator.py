@@ -15,7 +15,7 @@ DEFAULT_MIMETYPE = 'text/html; charset=UTF-8'
 app = Flask(__name__)
 
 
-def replace_urls(text):
+def replace_absolute_urls(text):
     regex = ('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F]'
              '[0-9a-fA-F]))+')
     urls = re.findall(regex, text)
@@ -24,6 +24,29 @@ def replace_urls(text):
         new_url = flask_request.url_root + url[len(parsed.scheme)+3:]
         text = text.replace(url, new_url)
     return text
+
+
+# TODO: apply only to "src" and "href"
+# Need to full module especially for html. To remove "integrity", etc
+def replace_relative_urls(text, host):
+    quote_indexes = find_all(text, '"')
+    new_text = text
+    for i, quote_idx in enumerate(quote_indexes):
+        if i % 2 != 0:
+            continue
+        finish = quote_indexes[i+1]
+        line = text[quote_idx+1:finish]
+        if not line.startswith('/'):
+            continue
+        if flask_request.url_root in line:
+            continue
+        new_line = flask_request.url_root + host + line
+        new_text = new_text.replace(line, new_line)
+    return new_text
+
+
+def find_all(string, substring):
+    return [i for i in range(len(string)) if string.startswith(substring, i)]
 
 
 def get_req_link(link):
@@ -44,9 +67,10 @@ def get_content_type(response):
     return response.headers.get('Content-Type', DEFAULT_MIMETYPE)
 
 
-def get_res_content(req_response, content_type):
+def get_res_content(req_response, link, content_type):
     if 'text' in content_type.lower():
-        text = replace_urls(req_response.text)
+        text = replace_absolute_urls(req_response.text)
+        text = replace_relative_urls(text, link.netloc)
         return bytes(text, 'utf-8')
 
 
@@ -60,11 +84,14 @@ def get_res_response(link):
     method = flask_request.method
     link = get_req_link(link)
     req_headers = get_req_headers(link)
+
     req_response = requests.request(
         method, link.geturl(), headers=req_headers, timeout=10)
+
     content_type = get_content_type(req_response)
-    res_content = get_res_content(req_response, content_type)
+    res_content = get_res_content(req_response, link, content_type)
     res_headers = get_res_headers(req_response)
+
     return Response(res_content, headers=res_headers, mimetype=content_type)
 
 
