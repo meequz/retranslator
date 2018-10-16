@@ -40,15 +40,20 @@ def get_req_headers(link):
     return req_headers
 
 
-def get_res_content(req_response):
-    mimetype = req_response.headers.get('Content-Type', DEFAULT_MIMETYPE)
-    if 'text' in mimetype.lower():
+def get_content_type(response):
+    return response.headers.get('Content-Type', DEFAULT_MIMETYPE)
+
+
+def get_res_content(req_response, content_type):
+    if 'text' in content_type.lower():
         text = replace_urls(req_response.text)
         return bytes(text, 'utf-8')
 
 
 def get_res_headers(req_response):
-    return dict(req_response.headers)
+    res_headers = dict(req_response.headers)
+    res_headers.pop('Content-Encoding', None)
+    res_headers.pop('Transfer-Encoding', None)
 
 
 def get_res_response(link):
@@ -57,9 +62,10 @@ def get_res_response(link):
     req_headers = get_req_headers(link)
     req_response = requests.request(
         method, link.geturl(), headers=req_headers, timeout=10)
-    res_content = get_res_content(req_response)
+    content_type = get_content_type(req_response)
+    res_content = get_res_content(req_response, content_type)
     res_headers = get_res_headers(req_response)
-    return Response(res_content, headers=res_headers)
+    return Response(res_content, headers=res_headers, mimetype=content_type)
 
 
 @app.route('/<path:link>', strict_slashes=False)
