@@ -39,6 +39,7 @@ def replace_relative_urls_in_html(soup, host):
     replace_relative_url(soup, prefix, 'link', 'href')
     replace_relative_url(soup, prefix, 'link', 'src')
     replace_relative_url(soup, prefix, 'img', 'src')
+    replace_relative_url(soup, prefix, 'script', 'src')
 
 
 def remove_attr(soup, tag_name, attr_name):
@@ -48,6 +49,7 @@ def remove_attr(soup, tag_name, attr_name):
 
 def remove_attrs_in_html(soup):
     remove_attr(soup, 'link', 'integrity')
+    remove_attr(soup, 'script', 'integrity')
 
 
 def is_html(text):
