@@ -1,5 +1,6 @@
 import logging
 import re
+import traceback
 from urllib.parse import urlparse
 
 import requests
@@ -122,7 +123,8 @@ def translate(link):
         res_response = get_res_response(link)
     except Exception as exc:
         logger.error(exc, exc_info=True)
-        res_response = Response('Invalid link', status=403)
+        t = traceback.format_exc().replace('\n', '<br>').replace(' ', '&nbsp;')
+        res_response = Response(t, status=403)
     return res_response
 
 
