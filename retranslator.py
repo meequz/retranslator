@@ -123,8 +123,8 @@ def translate(link):
         res_response = get_res_response(link)
     except Exception as exc:
         logger.error(exc, exc_info=True)
-        t = traceback.format_exc().replace('\n', '<br>').replace(' ', '&nbsp;')
-        res_response = Response(t, status=403)
+        tb = '<pre>' + traceback.format_exc() + '</pre>'
+        res_response = Response(tb, status=403)
     return res_response
 
 
