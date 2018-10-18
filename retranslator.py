@@ -1,7 +1,7 @@
 import logging
 import re
 import traceback
-from urllib.parse import urlparse
+from urllib.parse import urlparse as urllib_urlparse
 
 import requests
 from bs4 import BeautifulSoup
@@ -75,10 +75,10 @@ def find_all(string, substring):
     return [i for i in range(len(string)) if string.startswith(substring, i)]
 
 
-def parse_link(link):
+def urlparse(link):
     if '://' not in link[:10]:
         link = 'http://' + link
-    return urlparse(link)
+    return urllib_urlparse(link)
 
 
 def get_req_headers(link):
@@ -109,17 +109,26 @@ def get_res_headers(req_response):
     res_headers.pop('Transfer-Encoding', None)
 
 
-def get_res_response(link):
-    url = link.geturl()
+def get_req_response(link):
     method = flask_request.method
     req_headers = get_req_headers(link)
+    req_response = requests.request(
+        method, link.geturl(), headers=req_headers,
+        timeout=10, allow_redirects=False,
+    )
+    return req_response
 
-    req_response = requests.request(method, url, headers=req_headers,
-                                    **DEFAULT_REQUESTS_KWARGS)
+
+def self_redirect(url):
+    return redirect(add_root(url))
+
+
+def get_res_response(link):
+    req_response = get_req_response(link)
     if req_response.is_redirect:
         next_url = req_response.next.url
-        logger.warning('Following redirect  %s -> %s', url, next_url)
-        return redirect(add_root(next_url))
+        logger.warning('Following redirect  %s -> %s', link.geturl(), next_url)
+        return self_redirect(next_url)
 
     content_type = get_content_type(req_response)
     res_content = get_res_content(req_response, link, content_type)
@@ -130,12 +139,12 @@ def get_res_response(link):
 @app.route('/<path:link>', strict_slashes=False)
 def translate(link):
     link = flask_request.url[len(flask_request.url_root):]
-    ok_link = parse_link(link).geturl()
+    ok_link = urlparse(link).geturl()
     if link != ok_link:
-        return redirect(add_root(ok_link))
+        return self_redirect(ok_link)
 
     try:
-        res_response = get_res_response(parse_link(link))
+        res_response = get_res_response(urlparse(link))
     except Exception as exc:
         logger.error(exc, exc_info=True)
         tb = '<pre>' + traceback.format_exc() + '</pre>'
