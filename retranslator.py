@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 from flask import Flask
+from flask import redirect
 from flask import request as flask_request
 from flask import Response
 
@@ -17,13 +18,17 @@ app = Flask(__name__)
 logger = logging.getLogger(__name__)
 
 
+def add_root(url):
+    return flask_request.url_root + url
+
+
 def replace_absolute_urls(text):
     regex = ('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F]'
              '[0-9a-fA-F]))+')
     urls = re.findall(regex, text)
     for url in urls:
         parsed = urlparse(url)
-        new_url = flask_request.url_root + url[len(parsed.scheme)+3:]
+        new_url = add_root(url[len(parsed.scheme)+3:])
         text = text.replace(url, new_url)
     return text
 
@@ -35,7 +40,7 @@ def replace_relative_url(soup, prefix, tag_name, attr_name):
 
 
 def replace_relative_urls_in_html(soup, host):
-    prefix = flask_request.url_root + host
+    prefix = add_root(host)
     replace_relative_url(soup, prefix, 'a', 'href')
     replace_relative_url(soup, prefix, 'link', 'href')
     replace_relative_url(soup, prefix, 'link', 'src')
@@ -68,7 +73,7 @@ def find_all(string, substring):
     return [i for i in range(len(string)) if string.startswith(substring, i)]
 
 
-def get_req_link(link):
+def parse_link(link):
     if '://' not in link[:10]:
         link = 'http://' + link
     return urlparse(link)
@@ -104,9 +109,7 @@ def get_res_headers(req_response):
 
 def get_res_response(link):
     method = flask_request.method
-    link = get_req_link(link)
     req_headers = get_req_headers(link)
-
     req_response = requests.request(
         method, link.geturl(), headers=req_headers, timeout=10)
 
@@ -119,12 +122,17 @@ def get_res_response(link):
 
 @app.route('/<path:link>', strict_slashes=False)
 def translate(link):
+    ok_link = parse_link(link).geturl()
+    if link != ok_link:
+        return redirect(add_root(ok_link))
+
     try:
-        res_response = get_res_response(link)
+        res_response = get_res_response(parse_link(link))
     except Exception as exc:
         logger.error(exc, exc_info=True)
         tb = '<pre>' + traceback.format_exc() + '</pre>'
         res_response = Response(tb, status=403)
+
     return res_response
 
 
