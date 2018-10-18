@@ -12,10 +12,12 @@ from flask import Response
 
 
 DEFAULT_MIMETYPE = 'text/html; charset=UTF-8'
+DEFAULT_REQUESTS_KWARGS = {'timeout': 10, 'allow_redirects': False}
 
 
 app = Flask(__name__)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 def add_root(url):
@@ -108,20 +110,26 @@ def get_res_headers(req_response):
 
 
 def get_res_response(link):
+    url = link.geturl()
     method = flask_request.method
     req_headers = get_req_headers(link)
-    req_response = requests.request(
-        method, link.geturl(), headers=req_headers, timeout=10)
+
+    req_response = requests.request(method, url, headers=req_headers,
+                                    **DEFAULT_REQUESTS_KWARGS)
+    if req_response.is_redirect:
+        next_url = req_response.next.url
+        logger.warning('Following redirect  %s -> %s', url, next_url)
+        return redirect(add_root(next_url))
 
     content_type = get_content_type(req_response)
     res_content = get_res_content(req_response, link, content_type)
     res_headers = get_res_headers(req_response)
-
     return Response(res_content, headers=res_headers, mimetype=content_type)
 
 
 @app.route('/<path:link>', strict_slashes=False)
 def translate(link):
+    link = flask_request.url[len(flask_request.url_root):]
     ok_link = parse_link(link).geturl()
     if link != ok_link:
         return redirect(add_root(ok_link))
