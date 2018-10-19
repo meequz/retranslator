@@ -1,5 +1,7 @@
 flask
 requests
+bs4
+wheel
 
 ipdb
 flake8
