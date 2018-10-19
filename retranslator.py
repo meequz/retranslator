@@ -34,19 +34,18 @@ def replace_absolute_urls(text):
     return text
 
 
-def replace_relative_url(soup, prefix, tag_name, attr_name):
+def replace_relative_url_in_soup(soup, prefix, tag_name, attr_name):
     for tag in soup.findAll(tag_name):
         if attr_name in tag.attrs and not tag[attr_name].startswith('http'):
             tag[attr_name] = prefix + tag[attr_name]
 
 
-def replace_relative_urls_in_html(soup, host):
-    prefix = add_root(host)
-    replace_relative_url(soup, prefix, 'a', 'href')
-    replace_relative_url(soup, prefix, 'link', 'href')
-    replace_relative_url(soup, prefix, 'link', 'src')
-    replace_relative_url(soup, prefix, 'img', 'src')
-    replace_relative_url(soup, prefix, 'script', 'src')
+def replace_relative_urls_in_html(soup, prefix):
+    replace_relative_url_in_soup(soup, prefix, 'a', 'href')
+    replace_relative_url_in_soup(soup, prefix, 'link', 'href')
+    replace_relative_url_in_soup(soup, prefix, 'link', 'src')
+    replace_relative_url_in_soup(soup, prefix, 'img', 'src')
+    replace_relative_url_in_soup(soup, prefix, 'script', 'src')
 
 
 def remove_attr(soup, tag_name, attr_name):
@@ -63,18 +62,26 @@ def is_html(text):
     return bool(BeautifulSoup(text, 'html.parser').find())
 
 
-def html_to_res_html(text, host):
+def html_to_res_html(text, link):
     soup = BeautifulSoup(text, 'html.parser')
-    replace_relative_urls_in_html(soup, host)
+    prefix_for_relative = add_root(link.scheme + '://' + link.netloc)
+    replace_relative_urls_in_html(soup, prefix_for_relative)
     remove_attrs_in_html(soup)
     return str(soup)
 
 
-def replace_relative_urls_in_css(text, prefix):
-    urls = re.findall('url\(\/.*?\)', text, re.IGNORECASE)
+def replace_relative_url_in_css(regex, url_idx, text, prefix):
+    urls = re.findall(regex, text, re.IGNORECASE)
     for url in urls:
-        new_url = url[:4] + prefix + url[4:]
+        new_url = url[:url_idx] + prefix + url[url_idx:]
         text = text.replace(url, new_url)
+    return text
+
+
+def replace_relative_urls_in_css(text, prefix):
+    text = replace_relative_url_in_css('url\(\/.*?\)', 4, text, prefix)
+    text = replace_relative_url_in_css('url\(\"\/.*?\"\)', 5, text, prefix)
+    text = replace_relative_url_in_css("url\('\/.*?'\)", 5, text, prefix)
     return text
 
 
@@ -112,7 +119,7 @@ def get_res_content(req_response, link, content_type):
     if 'text' in content_type.lower():
         text = replace_absolute_urls(req_response.text)
     if 'text/html' in content_type.lower() and is_html(text):
-        text = html_to_res_html(text, link.netloc)
+        text = html_to_res_html(text, link)
     if 'text/css' in content_type.lower():
         text = css_to_res_css(text, link)
     return bytes(text, 'utf-8') or res_content
@@ -170,9 +177,3 @@ def translate(link):
 
 if __name__ == '__main__':
     app.run()
-
-
-#~ xml_sample = '<?xml version="1.0" encoding="UTF-8"?><note><to>Tove</to><from>Jani</from><heading>Reminder</heading><body>Dont forget me this weekend!</body></note>'
-#~ html_sample = '<!DOCTYPE html><html><body><h1>My First Heading</h1><p>My first paragraph.</p></body></html>'
-#~ json_example = '{"widget": {"debug": "on"}}'
-#~ css_sample = 'p {text-align: center; color: red;}'
