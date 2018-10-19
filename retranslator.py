@@ -12,7 +12,6 @@ from flask import Response
 
 
 DEFAULT_MIMETYPE = 'text/html; charset=UTF-8'
-DEFAULT_REQUESTS_KWARGS = {'timeout': 10, 'allow_redirects': False}
 
 
 app = Flask(__name__)
@@ -71,6 +70,20 @@ def html_to_res_html(text, host):
     return str(soup)
 
 
+def replace_relative_urls_in_css(text, prefix):
+    urls = re.findall('url\(\/.*?\)', text, re.IGNORECASE)
+    for url in urls:
+        new_url = url[:4] + prefix + url[4:]
+        text = text.replace(url, new_url)
+    return text
+
+
+def css_to_res_css(text, link):
+    prefix_for_relative = add_root(link.scheme + '://' + link.netloc)
+    text = replace_relative_urls_in_css(text, prefix_for_relative)
+    return text
+
+
 def find_all(string, substring):
     return [i for i in range(len(string)) if string.startswith(substring, i)]
 
@@ -100,6 +113,8 @@ def get_res_content(req_response, link, content_type):
         text = replace_absolute_urls(req_response.text)
     if 'text/html' in content_type.lower() and is_html(text):
         text = html_to_res_html(text, link.netloc)
+    if 'text/css' in content_type.lower():
+        text = css_to_res_css(text, link)
     return bytes(text, 'utf-8') or res_content
 
 
