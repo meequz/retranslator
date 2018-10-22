@@ -78,16 +78,22 @@ def replace_relative_url_in_css(regex, url_idx, text, prefix):
     return text
 
 
-def replace_relative_urls_in_css(text, prefix):
+def replace_relative_urls_in_css(text, link):
+    # replace urls starts with '/'
+    prefix = add_root(link.scheme + '://' + link.netloc)
     text = replace_relative_url_in_css('url\(\/.*?\)', 4, text, prefix)
     text = replace_relative_url_in_css('url\(\"\/.*?\"\)', 5, text, prefix)
     text = replace_relative_url_in_css("url\('\/.*?'\)", 5, text, prefix)
+    # replace urls starts with '../'
+    prefix = add_root('/'.join(link.geturl().split('/')[:-1]) + '/')
+    text = replace_relative_url_in_css('url\(..\/.*?\)', 4, text, prefix)
+    text = replace_relative_url_in_css('url\(\"..\/.*?\"\)', 5, text, prefix)
+    text = replace_relative_url_in_css("url\(\'..\/.*?\'\)", 5, text, prefix)
     return text
 
 
 def css_to_res_css(text, link):
-    prefix_for_relative = add_root(link.scheme + '://' + link.netloc)
-    text = replace_relative_urls_in_css(text, prefix_for_relative)
+    text = replace_relative_urls_in_css(text, link)
     return text
 
 
