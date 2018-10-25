@@ -28,16 +28,30 @@ def replace_absolute_urls(text):
              '[0-9a-fA-F]))+')
     urls = re.findall(regex, text)
     for url in urls:
-        parsed = urlparse(url)
-        new_url = add_root(url[len(parsed.scheme)+3:])
-        text = text.replace(url, new_url)
+        if not url.lower().startswith(flask_request.url_root.lower()):
+            text = text.replace(url, add_root(url))
     return text
+
+
+def is_relative(url):
+    http = url.lower().startswith('http://')
+    https = url.lower().startswith('https://')
+    schemeless = url.lower().startswith('//')
+    return not(http or https or schemeless)
 
 
 def replace_relative_url_in_soup(soup, prefix, tag_name, attr_name):
     for tag in soup.findAll(tag_name):
-        if attr_name in tag.attrs and not tag[attr_name].startswith('http'):
+        if attr_name in tag.attrs and is_relative(tag[attr_name]):
             tag[attr_name] = prefix + tag[attr_name]
+
+
+def replace_schemeless_url_in_soup(soup, tag_name, attr_name):
+    regex = ('//(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F]'
+             '[0-9a-fA-F]))+')
+    for tag in soup.findAll(tag_name):
+        if attr_name in tag.attrs and re.match(regex, tag[attr_name]):
+            tag[attr_name] = add_root(tag[attr_name][2:])
 
 
 def replace_relative_urls_in_html(soup, prefix):
@@ -46,6 +60,14 @@ def replace_relative_urls_in_html(soup, prefix):
     replace_relative_url_in_soup(soup, prefix, 'link', 'src')
     replace_relative_url_in_soup(soup, prefix, 'img', 'src')
     replace_relative_url_in_soup(soup, prefix, 'script', 'src')
+
+
+def replace_schemeless_urls_in_html(soup):
+    replace_schemeless_url_in_soup(soup, 'a', 'href')
+    replace_schemeless_url_in_soup(soup, 'link', 'href')
+    replace_schemeless_url_in_soup(soup, 'link', 'src')
+    replace_schemeless_url_in_soup(soup, 'img', 'src')
+    replace_schemeless_url_in_soup(soup, 'script', 'src')
 
 
 def remove_attr(soup, tag_name, attr_name):
@@ -66,6 +88,7 @@ def html_to_res_html(text, link):
     soup = BeautifulSoup(text, 'html.parser')
     prefix_for_relative = add_root(link.scheme + '://' + link.netloc)
     replace_relative_urls_in_html(soup, prefix_for_relative)
+    replace_schemeless_urls_in_html(soup)
     remove_attrs_in_html(soup)
     return str(soup)
 
@@ -81,14 +104,22 @@ def replace_relative_url_in_css(regex, url_idx, text, prefix):
 def replace_relative_urls_in_css(text, link):
     # replace urls starts with '/'
     prefix = add_root(link.scheme + '://' + link.netloc)
-    text = replace_relative_url_in_css('url\(\/.*?\)', 4, text, prefix)
-    text = replace_relative_url_in_css('url\(\"\/.*?\"\)', 5, text, prefix)
-    text = replace_relative_url_in_css("url\('\/.*?'\)", 5, text, prefix)
+    text = replace_relative_url_in_css(
+        'url\(\/(?!/).*?\)', 4, text, prefix)
+    text = replace_relative_url_in_css(
+        'url\(\"\/(?!/).*?\"\)', 5, text, prefix)
+    text = replace_relative_url_in_css(
+        "url\(\'\/(?!/).*?\'\)", 5, text, prefix)
+
     # replace urls starts with '../'
     prefix = add_root('/'.join(link.geturl().split('/')[:-1]) + '/')
-    text = replace_relative_url_in_css('url\(..\/.*?\)', 4, text, prefix)
-    text = replace_relative_url_in_css('url\(\"..\/.*?\"\)', 5, text, prefix)
-    text = replace_relative_url_in_css("url\(\'..\/.*?\'\)", 5, text, prefix)
+    text = replace_relative_url_in_css(
+        'url\(..\/.*?\)', 4, text, prefix)
+    text = replace_relative_url_in_css(
+        'url\(\"..\/.*?\"\)', 5, text, prefix)
+    text = replace_relative_url_in_css(
+        "url\(\'..\/.*?\'\)", 5, text, prefix)
+
     return text
 
 
