@@ -26,8 +26,8 @@ def add_root(url):
 def replace_absolute_urls(text):
     regex = ('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F]'
              '[0-9a-fA-F]))+')
-    urls = re.findall(regex, text)
-    for url in urls:
+    urls = sorted(list(set(re.findall(regex, text))), key=len)
+    for url in reversed(urls):
         if not url.lower().startswith(flask_request.url_root.lower()):
             text = text.replace(url, add_root(url))
     return text
@@ -195,10 +195,19 @@ def get_res_response(link):
     return Response(res_content, headers=res_headers, mimetype=content_type)
 
 
+def to_ok_link(link):
+    """Try to extract a correct URL from the URL provided"""
+    root = flask_request.url_root.lower()
+    while link.lower().startswith(root):
+        link = link[len(root):]
+    ok_link = urlparse(link).geturl()
+    return ok_link
+
+
 @app.route('/<path:link>', strict_slashes=False)
 def translate(link):
     link = flask_request.url[len(flask_request.url_root):]
-    ok_link = urlparse(link).geturl()
+    ok_link = to_ok_link(link)
     if link != ok_link:
         return self_redirect(ok_link)
 
