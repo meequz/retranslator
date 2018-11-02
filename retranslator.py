@@ -1,4 +1,5 @@
 import logging
+import os
 import re
 import traceback
 from urllib.parse import urlparse as urllib_urlparse
@@ -9,6 +10,7 @@ from flask import Flask
 from flask import redirect
 from flask import request as flask_request
 from flask import Response
+from flask import send_from_directory
 
 
 DEFAULT_MIMETYPE = 'text/html; charset=UTF-8'
@@ -195,21 +197,26 @@ def get_res_response(link):
     return Response(res_content, headers=res_headers, mimetype=content_type)
 
 
-def to_ok_link(link):
-    """Try to extract a correct URL from the URL provided"""
-    root = flask_request.url_root.lower()
+def cut_roots(link, root):
     while link.lower().startswith(root):
         link = link[len(root):]
-    ok_link = urlparse(link).geturl()
-    return ok_link
+    return link
+
+
+def extract_link():
+    """Extract a correct URL from the URL provided"""
+    root = flask_request.url_root.lower()
+    raw_link = flask_request.url[len(root):]
+    link = cut_roots(raw_link, root)
+    link = urlparse(link).geturl()
+    return raw_link, link
 
 
 @app.route('/<path:link>', strict_slashes=False)
 def translate(link):
-    link = flask_request.url[len(flask_request.url_root):]
-    ok_link = to_ok_link(link)
-    if link != ok_link:
-        return self_redirect(ok_link)
+    raw_link, link = extract_link()
+    if raw_link != link:
+        return self_redirect(link)
 
     try:
         res_response = get_res_response(urlparse(link))
@@ -219,6 +226,13 @@ def translate(link):
         res_response = Response(tb, status=403)
 
     return res_response
+
+
+@app.route('/favicon.ico')
+def favicon():
+    path = os.path.join(app.root_path, 'static')
+    mimetype = 'image/vnd.microsoft.icon'
+    return send_from_directory(path, 'favicon.ico', mimetype=mimetype)
 
 
 if __name__ == '__main__':
